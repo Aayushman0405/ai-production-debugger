@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-debugger
+  namespace: ai-debugger
+  labels:
+    app: ai-debugger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-debugger
+  template:
+    metadata:
+      labels:
+        app: ai-debugger
+    spec:
+      serviceAccountName: ai-debugger-sa
+      containers:
+        - name: api
+          image: ai-debugger:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: LLM_PROVIDER
+              value: "mock"   # safe default
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-debugger
+  namespace: ai-debugger
+spec:
+  type: ClusterIP
+  selector:
+    app: ai-debugger
+  ports:
+    - port: 80
+      targetPort: 8000
