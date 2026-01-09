@@ -8,7 +8,8 @@ from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from ai_debugger.metrics import (
     ANALYZE_REQUESTS_TOTAL,
-    ANALYZE_LATENCY
+    ANALYZE_LATENCY,
+    HEALTH_REQUESTS_TOTAL
 )
 
 from ai_debugger.correlator.incident_window import detect_incident_window
@@ -29,10 +30,11 @@ class AnalyzeRequest(BaseModel):
 
 
 # -------------------------
-# Health endpoint
+# Health endpoint (instrumented)
 # -------------------------
 @app.get("/health")
 def health():
+    HEALTH_REQUESTS_TOTAL.inc()
     return {"status": "ok"}
 
 
@@ -55,7 +57,7 @@ def analyze(req: AnalyzeRequest):
     start_time = time.time()
 
     try:
-        # 1. Incident window (validated but not used yet)
+        # 1. Detect incident window
         detect_incident_window(req.signals)
 
         # 2. Rank signals
