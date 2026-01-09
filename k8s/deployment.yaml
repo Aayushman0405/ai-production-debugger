@@ -7,9 +7,17 @@ metadata:
     app: ai-debugger
 spec:
   replicas: 1
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
   selector:
     matchLabels:
       app: ai-debugger
+
   template:
     metadata:
       labels:
@@ -18,13 +26,13 @@ spec:
       serviceAccountName: ai-debugger-sa
       containers:
         - name: api
-          image: ai-debugger:latest
-          imagePullPolicy: IfNotPresent
+          image: aayud/ai-production-debugger:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
           env:
             - name: LLM_PROVIDER
-              value: "mock"   # safe default
+              value: "mock"
           resources:
             requests:
               cpu: "100m"
@@ -57,3 +65,4 @@ spec:
   ports:
     - port: 80
       targetPort: 8000
+
