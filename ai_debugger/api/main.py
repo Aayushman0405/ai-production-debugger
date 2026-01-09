@@ -1,6 +1,15 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from typing import List, Dict
+import time
+
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+
+from ai_debugger.metrics import (
+    ANALYZE_REQUESTS_TOTAL,
+    ANALYZE_LATENCY
+)
 
 from ai_debugger.correlator.incident_window import detect_incident_window
 from ai_debugger.correlator.signal_ranker import rank_signals
@@ -19,13 +28,32 @@ class AnalyzeRequest(BaseModel):
     llm_mode: str = "good"  # for testing
 
 
+# -------------------------
+# Health endpoint
+# -------------------------
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
+# -------------------------
+# Metrics endpoint (Prometheus)
+# -------------------------
+@app.get("/metrics")
+def metrics():
+    return PlainTextResponse(
+        generate_latest(),
+        media_type=CONTENT_TYPE_LATEST
+    )
+
+
+# -------------------------
+# Analyze endpoint (instrumented)
+# -------------------------
 @app.post("/analyze")
 def analyze(req: AnalyzeRequest):
+    start_time = time.time()
+
     try:
         # 1. Incident window (validated but not used yet)
         detect_incident_window(req.signals)
@@ -43,10 +71,16 @@ def analyze(req: AnalyzeRequest):
         # 5. Validate response
         validated = validate_rca_response(response, ranked)
 
+        ANALYZE_REQUESTS_TOTAL.labels(status="success").inc()
+
         return {
             "status": "success",
             "rca": validated
         }
 
     except (LLMResponseError, InvalidRCAResponse, ValueError) as e:
+        ANALYZE_REQUESTS_TOTAL.labels(status="error").inc()
         raise HTTPException(status_code=400, detail=str(e))
+
+    finally:
+        ANALYZE_LATENCY.observe(time.time() - start_time)
