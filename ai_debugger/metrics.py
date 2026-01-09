@@ -1,13 +1,24 @@
 from prometheus_client import Counter, Histogram
 
-# Total analyze requests (success / error)
+# -------------------------
+# Request counters
+# -------------------------
+
 ANALYZE_REQUESTS_TOTAL = Counter(
     "ai_debugger_analyze_requests_total",
     "Total number of analyze requests",
-    ["status"]
+    ["status"]  # success | error
 )
 
-# Analyze latency histogram
+HEALTH_REQUESTS_TOTAL = Counter(
+    "ai_debugger_health_requests_total",
+    "Total number of health check requests"
+)
+
+# -------------------------
+# Latency histograms
+# -------------------------
+
 ANALYZE_LATENCY = Histogram(
     "ai_debugger_analyze_latency_seconds",
     "Latency of analyze endpoint",
