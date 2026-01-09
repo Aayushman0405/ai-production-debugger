@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-debugger
+  namespace: ai-debugger
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - debugger.aayushmandev.space
+      secretName: debugger-tls
+  rules:
+    - host: debugger.aayushmandev.space
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-debugger
+                port:
+                  number: 80
+
