@@ -16,9 +16,11 @@ from ai_debugger.metrics import (
 from ai_debugger.correlator.incident_window import detect_incident_window
 from ai_debugger.correlator.signal_ranker import rank_signals
 
-# LLM + validation are OPTIONAL (future stage)
 from ai_debugger.reasoning.prompt_template import build_prompt
-from ai_debugger.reasoning.llm_client import MockLLMClient, LLMResponseError
+from ai_debugger.reasoning.llm_client import (
+    get_llm_client,
+    LLMResponseError
+)
 from ai_debugger.reasoning.response_validator import (
     validate_rca_response,
     InvalidRCAResponse
@@ -32,7 +34,7 @@ app = FastAPI(title="AI Production Debugging Assistant")
 # -------------------------
 class AnalyzeRequest(BaseModel):
     signals: List[Dict[str, Any]]
-    llm_mode: str = "disabled"  # disabled | good | bad (mock)
+    llm_mode: str = "disabled"  # disabled | good | bad (mock only)
 
 
 # -------------------------
@@ -64,7 +66,7 @@ def analyze(req: AnalyzeRequest):
 
     try:
         # -------------------------------------------------
-        # 1. Normalize & validate signals (API boundary)
+        # 1. Normalize & validate signals
         # -------------------------------------------------
         signals = []
         for s in req.signals:
@@ -78,7 +80,7 @@ def analyze(req: AnalyzeRequest):
             })
 
         # -------------------------------------------------
-        # 2. Detect incident window (pure logic)
+        # 2. Detect incident window
         # -------------------------------------------------
         incident_result = detect_incident_window(signals)
 
@@ -88,11 +90,12 @@ def analyze(req: AnalyzeRequest):
         ranked = rank_signals(signals)
 
         # -------------------------------------------------
-        # 4. OPTIONAL: LLM reasoning (feature-gated)
+        # 4. Optional LLM reasoning
         # -------------------------------------------------
         if req.llm_mode != "disabled":
             prompt = build_prompt(ranked)
-            llm = MockLLMClient(mode=req.llm_mode)
+
+            llm = get_llm_client(mode=req.llm_mode)
             llm_response = llm.analyze(prompt)
 
             validated = validate_rca_response(llm_response, ranked)
@@ -104,7 +107,6 @@ def analyze(req: AnalyzeRequest):
                 "rca": validated
             }
         else:
-            # Deterministic, rule-based output (v1)
             result = {
                 "status": "success",
                 "mode": "rule-based",
