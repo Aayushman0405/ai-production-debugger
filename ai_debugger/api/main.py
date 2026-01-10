@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Any
+from datetime import datetime
 import time
 
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
@@ -14,6 +15,8 @@ from ai_debugger.metrics import (
 
 from ai_debugger.correlator.incident_window import detect_incident_window
 from ai_debugger.correlator.signal_ranker import rank_signals
+
+# LLM + validation are OPTIONAL (future stage)
 from ai_debugger.reasoning.prompt_template import build_prompt
 from ai_debugger.reasoning.llm_client import MockLLMClient, LLMResponseError
 from ai_debugger.reasoning.response_validator import (
@@ -24,13 +27,16 @@ from ai_debugger.reasoning.response_validator import (
 app = FastAPI(title="AI Production Debugging Assistant")
 
 
+# -------------------------
+# Request model
+# -------------------------
 class AnalyzeRequest(BaseModel):
-    signals: List[Dict]
-    llm_mode: str = "good"  # for testing
+    signals: List[Dict[str, Any]]
+    llm_mode: str = "disabled"  # disabled | good | bad (mock)
 
 
 # -------------------------
-# Health endpoint (instrumented)
+# Health endpoint
 # -------------------------
 @app.get("/health")
 def health():
@@ -39,7 +45,7 @@ def health():
 
 
 # -------------------------
-# Metrics endpoint (Prometheus)
+# Metrics endpoint
 # -------------------------
 @app.get("/metrics")
 def metrics():
@@ -50,35 +56,64 @@ def metrics():
 
 
 # -------------------------
-# Analyze endpoint (instrumented)
+# Analyze endpoint
 # -------------------------
 @app.post("/analyze")
 def analyze(req: AnalyzeRequest):
     start_time = time.time()
 
     try:
-        # 1. Detect incident window
-        detect_incident_window(req.signals)
+        # -------------------------------------------------
+        # 1. Normalize & validate signals (API boundary)
+        # -------------------------------------------------
+        signals = []
+        for s in req.signals:
+            if "name" not in s or "value" not in s:
+                raise ValueError("Each signal must have name and value")
 
-        # 2. Rank signals
-        ranked = rank_signals(req.signals)
+            signals.append({
+                "name": s["name"],
+                "value": s["value"],
+                "timestamp": s.get("timestamp") or datetime.utcnow().isoformat()
+            })
 
-        # 3. Build prompt
-        prompt = build_prompt(ranked)
+        # -------------------------------------------------
+        # 2. Detect incident window (pure logic)
+        # -------------------------------------------------
+        incident_result = detect_incident_window(signals)
 
-        # 4. Call LLM (mocked)
-        llm = MockLLMClient(mode=req.llm_mode)
-        response = llm.analyze(prompt)
+        # -------------------------------------------------
+        # 3. Rank signals
+        # -------------------------------------------------
+        ranked = rank_signals(signals)
 
-        # 5. Validate response
-        validated = validate_rca_response(response, ranked)
+        # -------------------------------------------------
+        # 4. OPTIONAL: LLM reasoning (feature-gated)
+        # -------------------------------------------------
+        if req.llm_mode != "disabled":
+            prompt = build_prompt(ranked)
+            llm = MockLLMClient(mode=req.llm_mode)
+            llm_response = llm.analyze(prompt)
+
+            validated = validate_rca_response(llm_response, ranked)
+
+            result = {
+                "status": "success",
+                "mode": "llm",
+                "incident": incident_result,
+                "rca": validated
+            }
+        else:
+            # Deterministic, rule-based output (v1)
+            result = {
+                "status": "success",
+                "mode": "rule-based",
+                "incident": incident_result,
+                "top_signals": ranked[:3]
+            }
 
         ANALYZE_REQUESTS_TOTAL.labels(status="success").inc()
-
-        return {
-            "status": "success",
-            "rca": validated
-        }
+        return result
 
     except (LLMResponseError, InvalidRCAResponse, ValueError) as e:
         ANALYZE_REQUESTS_TOTAL.labels(status="error").inc()
