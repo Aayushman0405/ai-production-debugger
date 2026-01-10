@@ -89,6 +89,10 @@ def analyze(req: AnalyzeRequest):
         # -------------------------------------------------
         ranked = rank_signals(signals)
 
+        # ✅ ADD STABLE EVIDENCE IDS (CRITICAL FIX)
+        for idx, signal in enumerate(ranked, start=1):
+            signal["id"] = f"E{idx}"
+
         # -------------------------------------------------
         # 4. Optional LLM reasoning
         # -------------------------------------------------
