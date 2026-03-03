@@ -1,0 +1,58 @@
+#!/bin/bash
+# AI Debugger Plugin - Fixed Version
+
+NAMESPACE=${1:-default}
+MINUTES=${2:-10}
+
+echo "🔍 AI Debugger - Analyzing namespace: $NAMESPACE (last $MINUTES minutes)"
+echo "──────────────────────────────────────────────────────"
+
+# Try different endpoints
+ENDPOINTS=(
+    "http://ai-debugger.ai-debugger.svc.cluster.local/auto-analyze"  # In-cluster
+    "http://localhost:8080/auto-analyze"                              # Local port-forward
+    "https://debugger.aayushmandev.space/auto-analyze"                # Your domain
+)
+
+for endpoint in "${ENDPOINTS[@]}"; do
+    echo "📡 Trying endpoint: $endpoint"
+    
+    # Prepare JSON data
+    JSON_DATA="{\"namespace\":\"$NAMESPACE\",\"window_minutes\":$MINUTES,\"llm_mode\":\"openai\"}"
+    
+    # Try curl with timeout
+    RESPONSE=$(curl -s -X POST "$endpoint" \
+        -H "Content-Type: application/json" \
+        -d "$JSON_DATA" \
+        --max-time 5 2>/dev/null)
+    
+    if [ $? -eq 0 ] && [ -n "$RESPONSE" ] && [ "$RESPONSE" != "null" ]; then
+        echo "✅ Connected successfully!"
+        echo ""
+        echo "$RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$RESPONSE"
+        
+        # Show summary if no issues
+        if echo "$RESPONSE" | grep -q "signals_found\":0"; then
+            echo ""
+            echo "✨ No issues detected in namespace: $NAMESPACE"
+            echo "   Check another namespace or increase time window:"
+            echo "   kubectl ai-debug <namespace> <minutes>"
+        fi
+        exit 0
+    else
+        echo "❌ Failed to connect"
+    fi
+    echo ""
+done
+
+echo "❌ Could not connect to AI Debugger service."
+echo ""
+echo "📝 Troubleshooting:"
+echo "   1. Make sure port-forward is running:"
+echo "      kubectl port-forward -n ai-debugger service/ai-debugger 8080:80"
+echo ""
+echo "   2. Or check if service is accessible:"
+echo "      kubectl get svc -n ai-debugger"
+echo ""
+echo "   3. Or use your domain if DNS is set:"
+echo "      curl https://debugger.aayushmandev.space/health"
