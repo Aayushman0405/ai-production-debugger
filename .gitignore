@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+*.egg-info/
+dist/
+build/
+
+# Secrets and config
+**/secrets.yaml
+**/*secret*.yaml
+*.env
+.env.*
+.env
+config/
+**/k8s/secrets.yaml
+**/k8s/*secret*.yaml
+
+# Local development
+.kube/
+.kubeconfig
+*.log
+*.pid
+*.pid.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Kubernetes
+**/kubeconfig
+**/.kube/
+
+# Docker
+*.tar
+*.tgz
+.dockerignore
+
+# Testing
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+.coverage.*
+*.cover
